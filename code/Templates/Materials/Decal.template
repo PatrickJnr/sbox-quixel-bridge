@@ -2,7 +2,11 @@
 
 Layer0
 {
-	shader "projected_decals.vfx"
+	shader "static_overlay.vfx"
+	
+	//---- Blend Mode ----
+	F_BLEND_MODE 1 // Translucent
+
 
 	//---- Normal ----
 	F_NORMAL_MAP 1
