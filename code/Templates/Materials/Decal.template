@@ -2,7 +2,10 @@
 
 Layer0
 {
-	shader "projected_decals.vfx"
+	shader "static_overlay.vfx"
+	
+	//---- Blend Mode ----
+	F_BLEND_MODE 1 // Translucent
 
 	//---- Metalness ----
 	F_METALNESS_TEXTURE 1
