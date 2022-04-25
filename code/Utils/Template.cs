@@ -9,7 +9,7 @@ namespace QuixelBridge;
 public class Template
 {
 	// HACK
-	private const string BasePath = "addons/sbox-quixel-bridge/code/";
+	private const string BasePath = "addons/quixel.bridge/code/";
 	private string TemplateContents { get; set; }
 
 	public Template( string templatePath )
