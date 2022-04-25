@@ -1,3 +1,6 @@
+# Do not clone this Repo! get the orignal [https://github.com/xezno/sbox-quixel-bridge]
+My repo is a huge mess.
+
 # Quixel Bridge plugin for s&box
 
 Quickly and easily import Quixel assets using Quixel Bridge.
