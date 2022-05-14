@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -12,10 +11,9 @@ public class BridgeImporter
 	// TODO: Expose these
 	#region Options
 	public static string ProjectPath { get; set; } = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\sbox\\addons\\megascans";
-	public static string ExportDirectory { get; set; } = "megascans";
 	public static int ServerPort { get; set; } = 24981;
-	public static float Scale { get; set; } = 0.3937f;
 	public static float LodIncrement { get; set; } = 25.0f;
+	public static string Entity { get; set; } = "prop_static";
 	#endregion
 
 	private BridgeServer listener;
@@ -56,9 +54,18 @@ public class BridgeImporter
 				var asset = Tools.AssetSystem.All.FirstOrDefault( x => x.Path == mdlPath );
 				if ( asset == null )
 				{
-					Log.Warning( $"Couldn't find the asset that just got exported? Did it fail?" );
+					// Retry
+					await Task.Delay( 1000 ); // Wait a second...
+					asset = Tools.AssetSystem.All.FirstOrDefault( x => x.Path == mdlPath );
+
+					if ( asset == null )
+					{
+						// Still nothing
+						Log.Warning( $"Couldn't find the asset that just got exported? Did it fail?" );
+					}
 				}
-				else
+
+				if ( asset != null )
 				{
 					asset.Compile( true ); // Force a full compile
 					Log.Trace( $"Exported to: {asset}" );
@@ -84,7 +91,7 @@ public class BridgeImporter
 		// Set location path
 		//
 		{
-			path = $"{ProjectPath}/{ExportDirectory}/";
+			path = $"{ProjectPath}/";
 			foreach ( var cat in quixelAsset.Categories )
 			{
 				if ( cat == "3d" || cat == "2d" || cat == "surface" )
@@ -281,7 +288,6 @@ public class BridgeImporter
 			var baseMesh = new Template( "templates/Mesh.template" );
 			meshes += baseMesh.Parse( new()
 			{
-				{ "Scale", Scale.ToString() },
 				{ "Mesh", quixelAsset.LODs[i].Path.PathRelativeTo( ProjectPath ).NormalizePath() }
 			} );
 		}
@@ -293,7 +299,8 @@ public class BridgeImporter
 		{
 			{ "Material", vmatPath },
 			{ "Lods", lods },
-			{ "Meshes", meshes }
+			{ "Meshes", meshes },
+			{ "Entity", Entity }
 		} ) );
 
 		return true;

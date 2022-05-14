@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
+﻿using System.Reflection.Emit;
 using Tools;
 
 /*
@@ -12,76 +10,26 @@ using Tools;
 namespace QuixelBridge;
 
 [Tool( "Bridge Settings", "settings", "Settings for the Quixel Bridge plugin" )]
-public class TestWindow : Window
+public partial class SettingsWindow : Window
 {
 	[Menu( "Editor", "Quixel/Settings", "settings" )]
 	public static void OpenWindow()
 	{
-		_ = new TestWindow();
+		_ = new SettingsWindow();
 	}
 
-	public TestWindow()
+	public SettingsWindow()
 	{
 		Title = "Quixel Bridge Settings";
-		Size = new Vector2( 500, 225 );
+		Size = new Vector2( 400, 300 );
 		MaximumSize = Size;
 		MinimumSize = Size;
 		ResizeButtonsVisible = false;
+		CloseButtonVisible = false;
 
 		Load();
 		CreateUI();
 		Show();
-	}
-
-	private LineEdit AddNumberEdit( string label, Widget parent, bool middle, string value = "" )
-	{
-		var widget = new Widget( parent );
-		widget.SetLayout( LayoutMode.TopToBottom );
-
-		var l = new Label( widget );
-		l.Text = label;
-		widget.Layout.Add( l );
-
-		var lineEdit = new LineEdit( value, parent );
-		lineEdit.SetStyles( "padding: 6px; background-color: #38393c; border-radius: 2px; " );
-		widget.Layout.Add( lineEdit, 1 );
-
-		if ( middle )
-			widget.SetStyles( "margin-left: 4px; margin-right: 4px;" );
-
-		parent.Layout.Add( widget );
-
-		return lineEdit;
-	}
-
-	private LineEdit AddDirectoryPicker( string label, Widget parent, string value = "" )
-	{
-		var widget = new PropertyRow( parent );
-
-		widget.SetLabel( label );
-
-		var lineEdit = new LineEdit( value, parent );
-		lineEdit.SetStyles( "padding: 6px; background-color: #38393c; border-radius: 2px; margin-right: 4px;" );
-		widget.Layout.Add( lineEdit, 1 );
-
-		var button = new Button( "Select folder", "folder_open", widget );
-		button.Clicked += () =>
-		{
-			var fd = new FileDialog( null );
-			fd.Title = "Find directory";
-			fd.SetFindDirectory();
-			parent.Layout.Add( fd );
-
-			if ( fd.Execute() )
-			{
-				lineEdit.Text = fd.SelectedFile;
-			}
-		};
-
-		widget.Layout.Add( button );
-		parent.Layout.Add( widget );
-
-		return lineEdit;
 	}
 
 	public void CreateUI()
@@ -90,86 +38,73 @@ public class TestWindow : Window
 
 		StatusBar.Visible = false;
 
+
 		var w = new Widget( null );
 		w.SetLayout( LayoutMode.TopToBottom );
-		w.SetSizeMode( SizeMode.Default, SizeMode.CanShrink );
+		w.SetSizeMode( SizeMode.Default, SizeMode.Default );
 		w.Layout.Margin = new( 8 );
+		w.SetStyles( "background-color: #38393c; border-radius: 2px;" );
 
 		//
-		// Paths
+		// Addon Settings
 		//
-		var paths = new Widget( w );
-		paths.SetLayout( LayoutMode.TopToBottom );
+		AddTitle( "Addon Settings", w );
+		var addonSettings = new Widget( w );
+		addonSettings.SetSizeMode( SizeMode.Default, SizeMode.CanShrink );
+		addonSettings.SetLayout( LayoutMode.TopToBottom );
 
-		var projectPathEdit = AddDirectoryPicker( "Addon Path", w, BridgeImporter.ProjectPath );
-		var outputPathEdit = AddDirectoryPicker( "Output directory", w, BridgeImporter.ExportDirectory );
-
-		w.Layout.Add( paths );
+		var addonName = AddAddonPicker( "Export Addon", addonSettings, Utility.Addons.GetAll() );
+		w.Layout.Add( addonSettings );
 
 		//
-		// Numbers
+		// Import Settings
 		//
-		var numbers = new Widget( w );
-		numbers.SetLayout( LayoutMode.LeftToRight );
+		AddTitle( "Import Settings", w );
+		var importSettings = new Widget( w );
+		importSettings.SetSizeMode( SizeMode.Default, SizeMode.CanShrink );
+		importSettings.SetLayout( LayoutMode.TopToBottom );
 
-		var serverPortEdit = AddNumberEdit( "Server port", numbers, false, BridgeImporter.ServerPort.ToString() );
-		var scaleEdit = AddNumberEdit( "Scale", numbers, true, BridgeImporter.Scale.ToString() );
-		var lodIncrementEdit = AddNumberEdit( "LOD increment", numbers, false, BridgeImporter.LodIncrement.ToString() );
+		var entityEdit = AddComboBox( "Prop Type", importSettings, new() { "prop_static", "prop_physics", "prop_dynamic" }, BridgeImporter.Entity );
+		var serverPortEdit = AddNumberEdit( "Server port", importSettings, false, BridgeImporter.ServerPort.ToString() );
+		var lodIncrementEdit = AddNumberEdit( "LOD increment", importSettings, false, BridgeImporter.LodIncrement.ToString() );
 
-		numbers.SetStyles( "padding-bottom: 0; padding-top: 16px; margin-bottom: 6px;" );
-		w.Layout.Add( numbers );
+		w.Layout.Add( importSettings );
 
 		//
 		// Buttons
 		//
 		var buttons = new Widget( w );
+		buttons.SetSizeMode( SizeMode.Default, SizeMode.CanShrink );
 		buttons.SetLayout( LayoutMode.LeftToRight );
 		buttons.Layout.AddStretchCell();
 
-		var saveButton = new Button( "Save", "save", buttons );
+		var cancelButton = new Button( "Cancel", "close", buttons );
+		cancelButton.SetStyles( "margin-right: 4px; background-color: #201f21; border: 0px;" );
+		cancelButton.Clicked += () =>
+		{
+			Close();
+		};
+
+		buttons.Layout.Add( cancelButton );
+
+		var saveButton = new Button( "Save and Close", "save", buttons );
+		saveButton.SetStyles( "background-color: #201f21; border: 0px;" );
 		saveButton.Clicked += () =>
 		{
-			BridgeImporter.ProjectPath = projectPathEdit.Text;
-			BridgeImporter.ExportDirectory = outputPathEdit.Text;
+			BridgeImporter.ProjectPath = SelectedAddonPath;
 			BridgeImporter.ServerPort = int.Parse( serverPortEdit.Text );
-			BridgeImporter.Scale = float.Parse( scaleEdit.Text );
 			BridgeImporter.LodIncrement = float.Parse( lodIncrementEdit.Text );
+			BridgeImporter.Entity = entityEdit.CurrentText;
 
 			Save();
+			Close();
 		};
+
 		buttons.Layout.Add( saveButton );
+		buttons.SetStyles( "margin-top: 10px;" );
 
 		w.Layout.Add( buttons );
 		Canvas = w;
-	}
-
-	private static void Load()
-	{
-		if ( !File.Exists( "quixel_settings.json" ) )
-			return;
-
-		var jsonInput = File.ReadAllText( "quixel_settings.json" );
-		var dict = JsonSerializer.Deserialize<Dictionary<string, string>>( jsonInput );
-
-		BridgeImporter.ProjectPath = dict["ProjectPath"];
-		BridgeImporter.ExportDirectory = dict["ExportDirectory"];
-		BridgeImporter.ServerPort = int.Parse( dict["ServerPort"] );
-		BridgeImporter.Scale = float.Parse( dict["Scale"] );
-		BridgeImporter.LodIncrement = float.Parse( dict["LodIncrement"] );
-	}
-
-	private static void Save()
-	{
-		var dict = new Dictionary<string, string>();
-
-		dict["ProjectPath"] = BridgeImporter.ProjectPath;
-		dict["ExportDirectory"] = BridgeImporter.ExportDirectory.ToSourceName();
-		dict["ServerPort"] = BridgeImporter.ServerPort.ToString();
-		dict["Scale"] = BridgeImporter.Scale.ToString();
-		dict["LodIncrement"] = BridgeImporter.LodIncrement.ToString();
-
-		var jsonOutput = JsonSerializer.Serialize( dict );
-		File.WriteAllText( "quixel_settings.json", jsonOutput );
 	}
 
 	[Sandbox.Event.Hotload]

@@ -13,8 +13,11 @@ class BridgeServer
 {
 	private TcpListener tcpListener;
 	private Thread tcpListenerThread;
-	private static bool QueueDirty { get; set; } = false;
-	private static List<string> ImportQueue { get; set; } = new List<string>();
+	private static bool queueDirty;
+
+	private static List<string> importQueue = new();
+	private bool isRunning = true;
+
 	private readonly int port;
 
 	public BridgeServer( int port )
@@ -32,7 +35,11 @@ class BridgeServer
 		tcpListenerThread.Start();
 	}
 
-	public void EndServer() => tcpListener.Stop();
+	public void EndServer()
+	{
+		isRunning = false;
+		tcpListener.Stop();
+	}
 
 	//
 	// Shit way of running things on the main thread
@@ -42,13 +49,13 @@ class BridgeServer
 	[Sandbox.Event.Frame]
 	public static void OnFrame()
 	{
-		if ( !QueueDirty )
+		if ( !queueDirty )
 			return;
 
 		Log.Trace( "Import queue dirty!" );
-		var importQueueCopy = ImportQueue.ToArray();
-		QueueDirty = false;
-		ImportQueue.Clear();
+		var importQueueCopy = importQueue.ToArray();
+		queueDirty = false;
+		importQueue.Clear();
 
 		var asyncTask = async () =>
 		{
@@ -102,21 +109,29 @@ class BridgeServer
 			byte[] bytes = new byte[1024];
 			while ( true )
 			{
-				using var connectedTcpClient = tcpListener.AcceptTcpClient();
-				using NetworkStream stream = connectedTcpClient.GetStream();
-
-				int length;
-				string clientMessage = "";
-
-				while ( (length = stream.Read( bytes, 0, bytes.Length )) != 0 )
+				try
 				{
-					byte[] incomingData = new byte[length];
-					Array.Copy( bytes, 0, incomingData, 0, length );
-					clientMessage += Encoding.ASCII.GetString( incomingData );
-				}
+					using var connectedTcpClient = tcpListener.AcceptTcpClient();
+					using NetworkStream stream = connectedTcpClient.GetStream();
 
-				ImportQueue.Add( clientMessage );
-				QueueDirty = true;
+					int length;
+					string clientMessage = "";
+
+					while ( (length = stream.Read( bytes, 0, bytes.Length )) != 0 )
+					{
+						byte[] incomingData = new byte[length];
+						Array.Copy( bytes, 0, incomingData, 0, length );
+						clientMessage += Encoding.ASCII.GetString( incomingData );
+					}
+
+					importQueue.Add( clientMessage );
+					queueDirty = true;
+				}
+				catch ( Exception ex )
+				{
+					if ( isRunning )
+						throw;
+				}
 			}
 		}
 		catch ( Exception ex ) // s&box does not like it when crashing on a non-main thread!!! handle it ourselves here
