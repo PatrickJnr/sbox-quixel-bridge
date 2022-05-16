@@ -6,7 +6,7 @@ namespace QuixelBridge;
 
 partial class SettingsWindow
 {
-	private static LineEdit AddNumberEdit( string label, Widget parent, bool middle, string value = "" )
+	private static LineEdit AddLineEdit( string label, Widget parent, string value = "" )
 	{
 		var widget = new PropertyRow( parent );
 		widget.SetLabel( label );
@@ -44,7 +44,7 @@ partial class SettingsWindow
 				SelectedAddonPath = addon.GetRootPath();
 			} );
 
-			if ( addon.GetRootPath() == BridgeImporter.ProjectPath )
+			if ( addon.GetRootPath() == BridgeImporter.Settings.ProjectPath )
 				comboBox.CurrentIndex = comboBoxIndex;
 
 			comboBoxIndex++;
