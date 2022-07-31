@@ -16,9 +16,7 @@ public class BridgeImporter
 	public void Run()
 	{
 		Instance = this;
-		BridgeSettings.LoadSettings();
 
-		// Starts the server in background.
 		listener = new BridgeServer( BridgeSettings.Instance.ServerPort );
 		listener.StartServer();
 	}
@@ -28,43 +26,36 @@ public class BridgeImporter
 		listener.EndServer();
 	}
 
-	public async Task ImportFrom( Progress.ProgressBar progressBar, QuixelAsset quixelAsset )
+	public async Task ImportFrom( Progress.ProgressBar progressBar, BridgeAsset quixelAsset )
 	{
 		if ( ExportAsset( quixelAsset, out string path ) )
 		{
-			if ( BridgeSettings.Instance.ProjectPath == null )
-				Log.Error( "literally how" );
-
 			var relativePath = Path.GetRelativePath( BridgeSettings.Instance.ProjectPath, path );
 
 			for ( int i = 0; i < quixelAsset.Meshes.Count; i++ )
 			{
 				Mesh mesh = quixelAsset.Meshes[i];
-				var mdlPath = Path.Join( relativePath, $"{quixelAsset.Name.ToSourceName()}_{quixelAsset.Id}.vmdl" ).NormalizeFilename();
+				var mdlPath = Path.Join( relativePath, $"{quixelAsset.Name.ToSourceName()}_{quixelAsset.Id}.vmdl" );
 
 				progressBar.SetSubtitle( "Compiling... (2/2)" );
 				progressBar.SetValues( 0.66f, 1.0f );
-				await Task.Delay( 50 );
 
-				var asset = Tools.AssetSystem.All.FirstOrDefault( x => x.Path == mdlPath );
-				if ( asset == null )
+				// Locate imported s&box asset
+				var engineAsset = Tools.AssetSystem.All.FirstOrDefault( x => x.Path.NormalizeFilename() == mdlPath.NormalizeFilename() );
+
+				if ( engineAsset == null )
 				{
-					// Retry
-					await Task.Delay( 1000 ); // Wait a second...
-					asset = Tools.AssetSystem.All.FirstOrDefault( x => x.Path == mdlPath );
-
-					if ( asset == null )
-					{
-						// Still nothing
-						Log.Warning( $"Couldn't find the asset that just got exported? Did it fail?" );
-					}
+					Log.Info( $"Asset system didn't catch asset quickly enough - skipping auto-compile for asset '{quixelAsset.Name}'" );
 				}
-
-				if ( asset != null )
+				else
 				{
-					asset.Compile( true ); // Force a full compile
-					Log.Trace( $"Exported to: {asset}" );
-					Log.Trace( $"TODO: Highlight in asset browser" );
+					// Force a full compile
+					engineAsset.Compile( true );
+
+					Log.Trace( $"Exported to: {engineAsset}" );
+
+					// Highlight in asset browser
+					Tools.MainAssetBrowser.Instance.FocusOnAsset( engineAsset );
 				}
 
 				progressBar.SetSubtitle( "Done." );
@@ -77,7 +68,7 @@ public class BridgeImporter
 		}
 	}
 
-	private bool ExportAsset( QuixelAsset quixelAsset, out string path )
+	private bool ExportAsset( BridgeAsset quixelAsset, out string path )
 	{
 		string dirName = new DirectoryInfo( quixelAsset.Path ).Name;
 		quixelAsset.DirectoryName = dirName;
@@ -129,7 +120,7 @@ public class BridgeImporter
 		return true;
 	}
 
-	private bool CopyFiles( ref QuixelAsset quixelAsset, string path )
+	private bool CopyFiles( ref BridgeAsset quixelAsset, string path )
 	{
 		// Create destination directories
 		Directory.CreateDirectory( path );
@@ -137,7 +128,7 @@ public class BridgeImporter
 		var assetPath = $"{path}assets";
 		Directory.CreateDirectory( assetPath );
 
-		void CopyAssets<T>( List<T> items, QuixelAsset asset, string subDir ) where T : IBaseAsset
+		void CopyAssets<T>( List<T> items, BridgeAsset asset, string subDir ) where T : IBaseAsset
 		{
 			var joinedSubDir = $"{assetPath}/{subDir}";
 			Directory.CreateDirectory( joinedSubDir );
@@ -158,11 +149,14 @@ public class BridgeImporter
 			}
 		}
 
+		// Copy meshes & lods
 		if ( quixelAsset.Meshes.Count > 0 )
 		{
 			CopyAssets( quixelAsset.Meshes, quixelAsset, "meshes" );
 			CopyAssets( quixelAsset.LODs, quixelAsset, "meshes" );
 		}
+
+		// Copy textures
 		CopyAssets( quixelAsset.Textures, quixelAsset, "textures" );
 
 		//
@@ -176,7 +170,7 @@ public class BridgeImporter
 		return true;
 	}
 
-	private static bool CreateMaterial( QuixelAsset quixelAsset )
+	private static bool CreateMaterial( BridgeAsset quixelAsset )
 	{
 		var vmatPath = $"{quixelAsset.Path}materials/";
 		Directory.CreateDirectory( vmatPath );
@@ -235,6 +229,9 @@ public class BridgeImporter
 				case "displacement":
 					pairs["Displacement"] = path;
 					break;
+				case "translucency":
+					pairs["Translucency"] = path;
+					break;
 				case "transmission":
 					// TODO
 					break;
@@ -251,8 +248,9 @@ public class BridgeImporter
 		return true;
 	}
 
-	private static bool CreateModel( QuixelAsset quixelAsset, int meshIndex )
+	private static bool CreateModel( BridgeAsset quixelAsset, int meshIndex )
 	{
+		// TODO: What the fuck
 		var vmatPath = $"{quixelAsset.Path.PathRelativeTo( BridgeSettings.Instance.ProjectPath )}materials/{quixelAsset.Name.ToSourceName()}_{quixelAsset.Id}.vmat";
 		var vmdlPath = $"{quixelAsset.Path}{quixelAsset.Name.ToSourceName()}_{quixelAsset.Id}.vmdl";
 
@@ -271,18 +269,24 @@ public class BridgeImporter
 			if ( !quixelAsset.LODs[i].Name.Contains( meshName ) )
 				continue;
 
-			var baseLod = new Template( "templates/Lod.template" );
-			lods += baseLod.Parse( new()
+			// LODs
 			{
-				{ "Threshold", (i * BridgeSettings.Instance.LodIncrement).ToString() },
-				{ "Mesh", $"unnamed_{i + 1}" }
-			} );
+				var baseLod = new Template( "templates/Lod.template" );
+				lods += baseLod.Parse( new()
+				{
+					{ "Threshold", (i * BridgeSettings.Instance.LodIncrement).ToString() },
+					{ "Mesh", $"unnamed_{i + 1}" }
+				} );
+			}
 
-			var baseMesh = new Template( "templates/Mesh.template" );
-			meshes += baseMesh.Parse( new()
+			// Mesh
 			{
-				{ "Mesh", quixelAsset.LODs[i].Path.PathRelativeTo( BridgeSettings.Instance.ProjectPath ).NormalizeFilename() }
-			} );
+				var baseMesh = new Template( "templates/Mesh.template" );
+				meshes += baseMesh.Parse( new()
+				{
+					{ "Mesh", quixelAsset.LODs[i].Path.PathRelativeTo( BridgeSettings.Instance.ProjectPath ).NormalizeFilename() }
+				} );
+			}
 		}
 
 		// Write vmdl

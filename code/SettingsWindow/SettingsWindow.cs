@@ -2,14 +2,15 @@
 using System.Diagnostics;
 using Tools;
 
-/*
- * TODO:
- * - BUG: Figure out whether I was fucking up somewhere or whether SetStylesheetFile actually doesn't work
- */
 namespace QuixelBridge;
 
 public partial class SettingsWindow : Dialog
 {
+	private ComboBox entityEdit;
+	private LineEdit serverPortEdit, lodIncrementEdit;
+	private CheckBox audioEnabledEdit;
+	private static string selectedAddonPath;
+
 	[Menu( "Editor", "Quixel/Settings", "settings" )]
 	public static void OpenWindow()
 	{
@@ -23,14 +24,9 @@ public partial class SettingsWindow : Dialog
 		Window.Size = new Vector2( 400, 200 );
 		Window.MaximumSize = Size;
 
-		BridgeSettings.LoadSettings();
 		CreateUI();
 		Show();
 	}
-
-	ComboBox entityEdit;
-	LineEdit serverPortEdit, lodIncrementEdit;
-	CheckBox audioEnabledEdit;
 
 	public void CreateUI()
 	{
@@ -132,13 +128,13 @@ public partial class SettingsWindow : Dialog
 			saveButton.ButtonType = "primary";
 			saveButton.Clicked += () =>
 			{
-				BridgeSettings.Instance.ProjectPath = SelectedAddonPath;
+				BridgeSettings.Instance.ProjectPath = selectedAddonPath;
 				BridgeSettings.Instance.ServerPort = int.Parse( serverPortEdit.Text );
 				BridgeSettings.Instance.LodIncrement = float.Parse( lodIncrementEdit.Text );
 				BridgeSettings.Instance.Entity = entityEdit.CurrentText;
 				BridgeSettings.Instance.EnableAudio = audioEnabledEdit.Value;
 
-				BridgeSettings.SaveSettings();
+				BridgeSettings.Instance.SaveToDisk();
 				Close();
 			};
 
