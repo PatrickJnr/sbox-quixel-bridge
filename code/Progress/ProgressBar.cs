@@ -1,7 +1,4 @@
-﻿using Sandbox;
-using Tools;
-
-public class ProgressBar : Widget
+﻿public class ProgressBar : Widget
 {
 	public ProgressBar( Widget parent = null ) : base( parent )
 	{
@@ -39,8 +36,8 @@ public class ProgressBar : Widget
 		Paint.DrawRect( rect, curve );
 
 		// process
-		var prect = rect.Contract( 1 );
-		prect.width *= progress;
+		var prect = rect.Shrink( 1 );
+		prect.Width *= progress;
 		Paint.SetBrush( color );
 		Paint.DrawRect( prect, curve - 1 );
 	}
